@@ -96,6 +96,7 @@
         '' else ""
       ));
 
+      # TODO  When start_database option, start database based on provided configs
       buildCi = config: let
         add_deps = builtins.concatStringsSep "\n" (builtins.map
           (dep:
@@ -103,7 +104,10 @@
           ) (config.ci.deps pkgs)
         );
         prepare_ci = ''
+          set -e
           ${add_deps}
+          export CI_DIR=/tmp/ci_${config.name}
+          mkdir -p $CI_DIR
         '';
       in pkgs.writeShellScript "${config.name}_ci" (''
         ${prepare_ci}
@@ -122,6 +126,7 @@
           backend = build_backend config.backend;
           frontend = build_frontend config.name config.frontend;
           ci = buildCi config;
+          docker = import ./docker_image.nix pkgs config (startRustyWebApp config);
         };
 
         apps = {
@@ -136,7 +141,7 @@
           };
         };
 
-        # TODO  Add NixOS module
+        nixosModules = import ./nixos_module.nix config (startRustyWebApp config);
       };
     };
   });
