@@ -37,6 +37,14 @@ And in the outputs:
 defaultPackage = build_rust_app.lib.${system}.startRustyWebApp rec {
   name = "example";
 
+  # Optionnal scripts you can set to be executed before / after
+  scripts = {
+    init = "# First thing";
+    pre_exec = "# Prepare service execution";
+    post_exec = "# Clean after service execution";
+    exit = "# Last thing to do";
+  };
+
   args = [
     "--port 8083"
   ];
@@ -59,7 +67,17 @@ defaultPackage = build_rust_app.lib.${system}.startRustyWebApp rec {
 The library can automate the creation of a `postgresql` database by doing:
 ``` nix
 defaultPackage = build_rust_app.lib.${system}.startRustyWebApp rec {
-  name = "template";
+  name = "example";
+
+  # Optionnal scripts you can set to be executed before / after
+  scripts = {
+    init = "# First thing";
+    pre_db = "# Prepare the creation of the database";
+    pre_exec = "# Prepare service execution";
+    post_exec = "# Clean after service execution";
+    post_db = "# Clean after the database service is stopped";
+    exit = "# Last thing to do";
+  };
 
   args = [
     "--port 8083"

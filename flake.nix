@@ -58,8 +58,13 @@
         fi
       '';
 
-      startRustyWebApp = {name, args, database, ...}@cfg: let
+      startRustyWebApp = {name, args, scripts, database, ...}@cfg: let
         argsstr = builtins.concatStringsSep " " args;
+        userscripts = {
+          init=""; exit="";
+          pre_db=""; post_db="";
+          pre_exec=""; post_exec="";
+        } // scripts;
   
         # TODO  check connection to remote database
         check_connection_db = pkgs.writeShellScript "check_connection_db" ''
@@ -77,24 +82,32 @@
           else "";
       in pkgs.writeShellScript "${name}_start" ((if database.enable
         then ''
+          ${userscripts.init}
           function interrupt() {
             echo -e -n "\033[1K\r"
             ${dbstop}
           }
           trap interrupt SIGINT
 
+          ${userscripts.pre_db}
           if ! ${dbstart}; then
             tail ${database.logfile}
             exit 1;
           fi
+          ${userscripts.post_db}
         '' else "") + ''
 
+          ${userscripts.pre_exec}
           ${build_backend cfg.backend}/bin/backend ${argsstr} ${build_frontend name cfg.frontend}
+          ${userscripts.post_exec}
 
         '' + (if database.enable then ''
           ${dbstop}
-        '' else ""
-      ));
+        '' else "") + ''
+
+          ${userscripts.exit}
+        ''
+      );
 
       # TODO  When start_database option, start database based on provided configs
       buildCi = config: let
