@@ -85,7 +85,7 @@
         scripts ? {},
       ...}@buildconf:
       let
-        argsstr = builtins.concatStringsSep " " (lib.attrsets.mapAttrsToList (arg: value: "${arg} ${value}") args);
+        argsstr = builtins.concatStringsSep " " (nixpkgs.lib.attrsets.mapAttrsToList (arg: value: "${arg} ${value}") args);
         userscripts = {
           init=""; exit="";
           pre_db=""; post_db="";
