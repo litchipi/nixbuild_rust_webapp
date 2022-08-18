@@ -121,8 +121,8 @@
           ${userscripts.post_db}
         '' else "") + (if database.required then ''
 
-          ${db.ensureUserExists database.user}
-          ${db.ensureDbExists database.dbname}
+          ${db.ensureUserExists database}
+          ${db.ensureDbExists database}
           ${check_connection_db}
         '' else "") + ''
 
