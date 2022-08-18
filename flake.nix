@@ -22,11 +22,28 @@
     };
   in {
     lib = rec {
+      db = {
+        ensureUserExists = cfg: pkgs.writeShellScript "psql_ensure_${cfg.user}_user_exist" ''
+          if ! ${pkgs.postgresql}/bin/psql -h ${cfg.dir} \
+            -p ${builtins.toString cfg.port} -U ${cfg.user} \
+            -n "${cfg.dbname}" \
+            -c "SELECT * FROM pg_catalog.pg_user"|grep ${cfg.user} 1>/dev/null; then
+            ${pkgs.postgresql}/bin/createuser -p ${builtins.toString cfg.port} -h ${cfg.dir} -d ${cfg.user}
+          fi
+        '';
+        ensureDbExists = cfg: pkgs.writeShellScript "psql_ensure_${cfg.dbname}_db_exist" ''
+          if ! ${pkgs.postgresql}/bin/psql -h ${cfg.dir} \
+            -p ${builtins.toString cfg.port} -U ${cfg.user} -n "${cfg.dbname}" \
+            -c "SELECT * FROM pg_catalog.pg_database" 1>/dev/null 2>/dev/null; then
+            ${pkgs.postgresql}/bin/createdb -h ${cfg.dir} -p ${builtins.toString cfg.port} -U ${cfg.user} ${cfg.dbname}
+          fi
+        '';
+      };
+
       build_backend = backend: let
         backend_targets = pkgs.rustBuilder.makePackageSet {
           inherit (backend) rustChannel rustVersion;
           packageFun = import backend.cargo2nix_file;
-          fetchCrateAlternativeRegistry = pkgs.rustBuilder.rustLib.fetchCrateAlternativeRegistryExpensive;
         };
       in (backend_targets.workspace.backend {}).bin;
 
@@ -51,8 +68,8 @@
         if [ ! -f ${database.dir}/PG_VERSION ]; then
           initdb -D ${database.dir} --no-locale --encoding=UTF8
           pg_ctl ${pgctl_args} start
-          createuser -p ${builtins.toString database.port} -h ${database.dir} -d ${database.user}
-          createdb -h ${database.dir} -p ${builtins.toString database.port} -U ${database.user} ${database.dbname}
+          ${db.ensureUserExists database}
+          ${db.ensureDbExists database}
         else
           pg_ctl ${pgctl_args} start
         fi
@@ -66,23 +83,23 @@
           pre_exec=""; post_exec="";
         } // scripts;
   
-        # TODO  check connection to remote database
-        check_connection_db = pkgs.writeShellScript "check_connection_db" ''
+        check_connection_db = ''
+          ${pkgs.postgresql}/bin/pg_isready --quiet -h ${database.host} \
+            -p ${builtins.toString database.port} \
+            -U ${database.user} \
+            -d ${database.dbname}
         '';
-        dbstart = if database.local
-          then "${start_database cfg}"
-          else "${check_connection_db}";
 
-        dbstop = if database.local
-          then ''
-            if [ -f ${database.dir}/postmaster.pid ]; then
-              ${pkgs.postgresql}/bin/pg_ctl -D ${database.dir} stop
-            fi
-          ''
-          else "";
-      in pkgs.writeShellScript "${name}_start" ((if database.enable
-        then ''
+        dbstop = ''
+          if [ -f ${database.dir}/postmaster.pid ]; then
+            ${pkgs.postgresql}/bin/pg_ctl -D ${database.dir} stop
+          fi
+        '';
+      in pkgs.writeShellScript "${name}_start" (''
           ${userscripts.init}
+
+        '' + (if database.spawn
+        then ''
           function interrupt() {
             echo -e -n "\033[1K\r"
             ${dbstop}
@@ -90,18 +107,23 @@
           trap interrupt SIGINT
 
           ${userscripts.pre_db}
-          if ! ${dbstart}; then
+          if ! ${start_database cfg}; then
             tail ${database.logfile}
             exit 1;
           fi
           ${userscripts.post_db}
+
+        '' else "") + (if database.required then ''
+
+          ${check_connection_db}
+
         '' else "") + ''
 
           ${userscripts.pre_exec}
           ${build_backend cfg.backend}/bin/backend ${argsstr} ${build_frontend name cfg.frontend}
           ${userscripts.post_exec}
 
-        '' + (if database.enable then ''
+        '' + (if database.spawn then ''
           ${dbstop}
         '' else "") + ''
 
