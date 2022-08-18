@@ -166,6 +166,8 @@
           frontend = build_frontend config.name config.frontend;
           ci = buildCi config;
           docker = import ./docker_image.nix pkgs config (startRustyWebApp config);
+          # Usage: override_config (initcfg: { your_config_overwrite });
+          override_config = new_config: startRustyWebApp (inputs.nixpkgs.lib.attrsets.recursiveUpdate config (new_config config));
         };
 
         apps = {
