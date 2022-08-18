@@ -68,8 +68,6 @@
         if [ ! -f ${database.dir}/PG_VERSION ]; then
           initdb -D ${database.dir} --no-locale --encoding=UTF8
           pg_ctl ${pgctl_args} start
-          ${db.ensureUserExists database}
-          ${db.ensureDbExists database}
         else
           pg_ctl ${pgctl_args} start
         fi
@@ -121,11 +119,11 @@
             exit 1;
           fi
           ${userscripts.post_db}
-
         '' else "") + (if database.required then ''
 
+          ${db.ensureUserExists database.user}
+          ${db.ensureDbExists database.dbname}
           ${check_connection_db}
-
         '' else "") + ''
 
           ${userscripts.pre_exec}
@@ -140,7 +138,6 @@
         ''
       );
 
-      # TODO  When start_database option, start database based on provided configs
       buildCi = config: let
         add_deps = builtins.concatStringsSep "\n" (builtins.map
           (dep:
