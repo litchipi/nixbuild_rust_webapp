@@ -75,7 +75,11 @@
         fi
       '';
 
-      startRustyWebApp = {name, args, scripts, database, ...}@cfg: let
+      startRustyWebApp = {name, args,
+        scripts ? {},
+        database ? {required = false; spawn = false;},
+        ...
+      }@cfg: let
         argsstr = builtins.concatStringsSep " " args;
         userscripts = {
           init=""; exit="";
