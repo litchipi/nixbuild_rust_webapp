@@ -164,20 +164,22 @@
       );
 
       # Usage:  buildFlake (runargs: { your config }) { default run args }
-      buildFlake = buildcfg_fct: default_args: {
+      buildFlake = buildcfg_fct: default_args: let
+        getargs = run: buildcfg_fct (nixpkgs.lib.attrsets.recursiveUpdate default_args run);
+      in {
         packages = {
           default = startRustyWebApp (buildcfg_fct default_args);
-          prepare = run: startRustyWebApp (buildconf run);
+          prepare = run: startRustyWebApp (getargs run);
 
-          dbstart = run: start_database (buildcfg_fct run);
+          dbstart = run: start_database (getargs run);
 
-          backend = run: build_backend (buildcfg_fct run).backend;
+          backend = run: build_backend (getargs run).backend;
           frontend = run: let
-            buildconf = buildcfg_fct run;
+            buildconf = getargs run;
           in build_frontend buildconf.name buildconf.frontend;
 
-          ci = run: buildCi (buildcfg_fct run);
-          docker = run: import ./docker_image.nix pkgs (buildcfg_fct run) (startRustyWebApp (buildcfg_fct run));
+          ci = run: buildCi (getargs run);
+          docker = run: import ./docker_image.nix pkgs (getargs run) (startRustyWebApp (getargs run));
 
           # Usage:  override (initbuildcfg: { your build config here }) (initruncfg: buildconfig: { your run config here })
           override = new_buildconf: new_runconf: let
