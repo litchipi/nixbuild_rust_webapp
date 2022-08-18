@@ -1,5 +1,5 @@
 # TODO    Validate this derivation
-pkgs: { name, version, ...}: startup: pkgs.dockerTools.buildImage {
+pkgs: { name, ...}: startup: pkgs.dockerTools.buildImage {
   inherit name;
   tag = name;
   config = {

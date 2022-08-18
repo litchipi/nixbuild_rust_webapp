@@ -75,12 +75,17 @@
         fi
       '';
 
-      startRustyWebApp = {name, args,
+      startRustyWebApp =
+      {
+        name,
+        database ? { required = false; spawn = false;},
+        backend,
+        frontend,
+        args ? {},
         scripts ? {},
-        database ? {required = false; spawn = false;},
-        ...
-      }@cfg: let
-        argsstr = builtins.concatStringsSep " " args;
+      ...}@buildconf:
+      let
+        argsstr = builtins.concatStringsSep " " (lib.attrsets.mapAttrsToList (arg: value: "${arg} ${value}") args);
         userscripts = {
           init=""; exit="";
           pre_db=""; post_db="";
@@ -111,7 +116,7 @@
           trap interrupt SIGINT
 
           ${userscripts.pre_db}
-          if ! ${start_database cfg}; then
+          if ! ${start_database buildconf}; then
             tail ${database.logfile}
             exit 1;
           fi
@@ -124,7 +129,7 @@
         '' else "") + ''
 
           ${userscripts.pre_exec}
-          ${build_backend cfg.backend}/bin/backend ${argsstr} ${build_frontend name cfg.frontend}
+          ${build_backend backend}/bin/backend ${argsstr} ${build_frontend name frontend}
           ${userscripts.post_exec}
 
         '' + (if database.spawn then ''
@@ -158,31 +163,43 @@
       '' + (builtins.concatStringsSep "\n" (config.ci.frontend_scripts))
       );
 
-      buildFlake = config: {
+      # Usage:  buildFlake (runargs: { your config }) { default run args }
+      buildFlake = buildcfg_fct: default_args: {
         packages = {
-          default = startRustyWebApp config;
-          dbstart = start_database config;
-          backend = build_backend config.backend;
-          frontend = build_frontend config.name config.frontend;
-          ci = buildCi config;
-          docker = import ./docker_image.nix pkgs config (startRustyWebApp config);
-          # Usage: override_config (initcfg: { your_config_overwrite });
-          override_config = new_config: startRustyWebApp (inputs.nixpkgs.lib.attrsets.recursiveUpdate config (new_config config));
+          default = startRustyWebApp (buildcfg_fct default_args);
+          prepare = run: startRustyWebApp (buildconf run);
+
+          dbstart = run: start_database (buildcfg_fct run);
+
+          backend = run: build_backend (buildcfg_fct run).backend;
+          frontend = run: let
+            buildconf = buildcfg_fct run;
+          in build_frontend buildconf.name buildconf.frontend;
+
+          ci = run: buildCi (buildcfg_fct run);
+          docker = run: import ./docker_image.nix pkgs (buildcfg_fct run) (startRustyWebApp (buildcfg_fct run));
+
+          # Usage:  override (initbuildcfg: { your build config here }) (initruncfg: buildconfig: { your run config here })
+          override = new_buildconf: new_runconf: let
+            newbuildconf_val = nixpkgs.lib.attrsets.recursiveUpdate buildconf (new_buildconf buildconf);
+            runconf_final = runconf newbuildconf_val;
+            newrunconf_val = nixpkgs.lib.attrsets.recursiveUpdate runconf_final (new_runconf runconf_final newbuildconf_val);
+          in startRustyWebApp newbuildconf_val newrunconf_val;
         };
 
         apps = {
           default = {
             type = "app";
-            program = "${startRustyWebApp config}";
+            program = "${startRustyWebApp buildconf (runconf buildconf)}";
           };
 
           ci = {
             type = "app";
-            program = "${buildCi config}";
+            program = "${buildCi buildconf}";
           };
         };
 
-        nixosModules = import ./nixos_module.nix config (startRustyWebApp config);
+        nixosModules = import ./nixos_module.nix buildconfig (startRustyWebApp buildconfig (runconf buildconfig));
       };
     };
   });
