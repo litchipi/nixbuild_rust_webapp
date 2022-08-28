@@ -67,10 +67,8 @@
         mkdir -p ${database.dir}
         if [ ! -f ${database.dir}/PG_VERSION ]; then
           initdb -D ${database.dir} --no-locale --encoding=UTF8
-          pg_ctl ${pgctl_args} start
-        else
-          pg_ctl ${pgctl_args} start
         fi
+        pg_ctl ${pgctl_args} start
       '';
 
       startRustyWebApp =
