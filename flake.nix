@@ -179,7 +179,9 @@
 
           # Usage:  override (initbuildcfg: { your build config here }) (initruncfg: buildconfig: { your run config here })
           override = new_buildconf: new_runconf: let
-            newbuildconf_val = nixpkgs.lib.attrsets.recursiveUpdate buildconf (new_buildconf buildconf);
+            newbuildconf_val = run: let
+              buildconf = getargs run;
+            in nixpkgs.lib.attrsets.recursiveUpdate buildconf (new_buildconf buildconf);
             runconf_final = runconf newbuildconf_val;
             newrunconf_val = nixpkgs.lib.attrsets.recursiveUpdate runconf_final (new_runconf runconf_final newbuildconf_val);
           in startRustyWebApp newbuildconf_val newrunconf_val;
@@ -188,16 +190,16 @@
         apps = {
           default = {
             type = "app";
-            program = "${startRustyWebApp buildconf (runconf buildconf)}";
+            program = "${startRustyWebApp (buildcfg_fct default_args)}";
           };
 
           ci = {
             type = "app";
-            program = "${buildCi buildconf}";
+            program = "${buildCi (buildcfg_fct default_args)}";
           };
         };
 
-        nixosModules = import ./nixos_module.nix buildconfig (startRustyWebApp buildconfig (runconf buildconfig));
+        nixosModules = import ./nixos_module.nix buildconfig (run: startRustyWebApp (getargs run));
       };
     };
   });
