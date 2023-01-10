@@ -166,11 +166,11 @@
         packages = {
           default = startRustyWebApp buildconfig;
 
-          dbstart = start_database args;
-          backend = build_backend args.backend;
-          frontend = build_frontend buildconfig.name args.frontend;
+          dbstart = start_database buildconfig;
+          backend = build_backend buildconfig.backend;
+          frontend = build_frontend buildconfig.name buildconfig.frontend;
 
-          ci = run: buildCi args;
+          ci = run: buildCi buildconfig;
           docker = run: import ./docker_image.nix {
             inherit pkgs;
             name = buildconfig.name;
@@ -194,7 +194,7 @@
 
         nixosModules = import ./nixos_module.nix {
           name = buildconfig.name;
-          start_function = args: startRustyWebApp (buildcfg_fct args);
+          start_function = runargs: startRustyWebApp (buildcfg_fct runargs);
           default_runtime_args = args;
         };
       };
