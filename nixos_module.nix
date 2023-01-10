@@ -1,5 +1,6 @@
 # TODO  Validate this module
-{ name, ...}: startup: default_runtime_config: {config, lib, pkgs, ...}: {
+{ name, start_function, default_runtime_args, ... }:
+{config, lib, pkgs, ...}: {
   options.services."${name}" = {
     enable = lib.mkEnable "${name} web service";
     runtimeConfiguration = lib.mkOption {

@@ -87,7 +87,7 @@
           pre_db=""; post_db="";
           pre_exec=""; post_exec="";
         } // scripts;
-  
+
         check_connection_db = ''
           ${pkgs.postgresql}/bin/pg_isready --quiet -h ${database.host} \
             -p ${builtins.toString database.port} \
@@ -159,47 +159,44 @@
       '' + (builtins.concatStringsSep "\n" (config.ci.frontend_scripts))
       );
 
-      # Usage:  buildFlake (runargs: { your config }) { default run args }
-      buildFlake = buildcfg_fct: default_args: let
-        getargs = run: buildcfg_fct (nixpkgs.lib.attrsets.recursiveUpdate default_args run);
+      # Usage:  buildFlake (args: { your config }) { args }
+      buildFlake = buildcfg_fct: args: let
+        buildconfig = buildcfg_fct args;
       in {
         packages = {
-          default = startRustyWebApp (buildcfg_fct default_args);
-          prepare = run: startRustyWebApp (getargs run);
+          default = startRustyWebApp buildconfig;
 
-          dbstart = run: start_database (getargs run);
+          dbstart = start_database args;
+          backend = build_backend args.backend;
+          frontend = build_frontend buildconfig.name args.frontend;
 
-          backend = run: build_backend (getargs run).backend;
-          frontend = run: let
-            buildconf = getargs run;
-          in build_frontend buildconf.name buildconf.frontend;
+          ci = run: buildCi args;
+          docker = run: import ./docker_image.nix {
+            inherit pkgs;
+            name = buildconfig.name;
+            startup = startRustyWebApp buildconfig;
+          };
 
-          ci = run: buildCi (getargs run);
-          docker = run: import ./docker_image.nix pkgs (getargs run) (startRustyWebApp (getargs run));
-
-          # Usage:  override (initbuildcfg: { your build config here }) (initruncfg: buildconfig: { your run config here })
-          override = new_buildconf: new_runconf: let
-            newbuildconf_val = run: let
-              buildconf = getargs run;
-            in nixpkgs.lib.attrsets.recursiveUpdate buildconf (new_buildconf buildconf);
-            runconf_final = runconf newbuildconf_val;
-            newrunconf_val = nixpkgs.lib.attrsets.recursiveUpdate runconf_final (new_runconf runconf_final newbuildconf_val);
-          in startRustyWebApp newbuildconf_val newrunconf_val;
+          override = buildFlake buildcfg_fct;
         };
 
         apps = {
           default = {
             type = "app";
-            program = "${startRustyWebApp (buildcfg_fct default_args)}";
+            program = "${startRustyWebApp buildconfig}";
           };
 
           ci = {
             type = "app";
-            program = "${buildCi (buildcfg_fct default_args)}";
+            program = "${buildCi buildconfig}";
           };
         };
 
-        nixosModules = import ./nixos_module.nix buildconfig (run: startRustyWebApp (getargs run));
+        nixosModules = import ./nixos_module.nix {
+          name = buildconfig.name;
+          start_function = args: startRustyWebApp (buildcfg_fct args);
+          default_runtime_args = args;
+        };
       };
     };
   });
